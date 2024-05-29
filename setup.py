@@ -20,7 +20,7 @@ _deps = [
     "transformers>=4.39.0,<4.41.0",
     "torch",
     "sentencepiece",
-    "descript-audio-codec",
+    "git+https://github.com/Saltb0xApps/descript-audio-codec.git",
 ]
 
 _extras_dev_deps = [
