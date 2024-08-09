@@ -12,7 +12,21 @@ from transformers import (
 )
 from accelerate.utils.memory import release_memory
 import numpy as np
+from demucs.apply import apply_model
+from demucs.audio import convert_audio
 
+# Function to separate vocals using Demucs
+def separate_vocals(audios, separator, device, input_sampling_rate=44100):
+    output_audios = []
+    for audio in audios:
+        audio_tensor = torch.tensor(audio, device=device).unsqueeze(0).to(torch.float32)
+        audio_tensor = convert_audio(audio_tensor, input_sampling_rate, separator.samplerate, separator.audio_channels)
+        stems = apply_model(separator, audio_tensor, device=device)
+        vocal_stem_index = separator.sources.index('vocals')
+        vocals = stems[:, vocal_stem_index]
+        output_audios.append(vocals.cpu().numpy())
+    
+    return output_audios
 
 def clap_similarity(clap_model_name_or_path, texts, audios, device, input_sampling_rate=44100):
     clap = AutoModel.from_pretrained(clap_model_name_or_path)
@@ -42,7 +56,6 @@ def clap_similarity(clap_model_name_or_path, texts, audios, device, input_sampli
     clap, clap_inputs, audio_features, text_features = release_memory(clap, clap_inputs, audio_features, text_features)
     return cosine_sim
 
-
 def si_sdr(audios, device, input_sampling_rate=44100):
     max_audio_length = 15 * SQUIM_OBJECTIVE.sample_rate
     model = SQUIM_OBJECTIVE.get_model().to((device))
@@ -67,7 +80,6 @@ def si_sdr(audios, device, input_sampling_rate=44100):
     audios, model = release_memory(audios, model)
     return si_sdrs
 
-
 def wer(
     asr_model_name_or_path,
     prompts,
@@ -77,7 +89,11 @@ def wer(
     sampling_rate,
     noise_level_to_compute_clean_wer,
     si_sdr_measures,
+    separator,
 ):
+    # Separate vocals using the provided Demucs model
+    audios = separate_vocals(audios, separator, device, input_sampling_rate=sampling_rate)
+
     metric = evaluate.load("wer")
     asr_pipeline = pipeline(model=asr_model_name_or_path, device=device, chunk_length_s=25.0)
 
