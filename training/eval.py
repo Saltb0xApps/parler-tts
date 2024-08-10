@@ -18,17 +18,28 @@ from demucs.audio import convert_audio
 
 # Function to separate vocals using Demucs
 def separate_vocals(audios, device, input_sampling_rate=44100):
-    # Load the Demucs model
+    # Load the Demucs model on the specified device
     separator = pretrained.get_model("htdemucs").to(device)
     
     output_audios = []
     for audio in audios:
-        audio_tensor = torch.tensor(audio, device=device).unsqueeze(0).to(torch.float32)
-        audio_tensor = convert_audio(audio_tensor, input_sampling_rate, separator.samplerate, separator.audio_channels)
-        stems = apply_model(separator, audio_tensor, device=device)
-        vocal_stem_index = separator.sources.index('vocals')
-        vocals = stems[:, vocal_stem_index]
-        output_audios.append(vocals.cpu().numpy())
+        try:
+            audio_tensor = torch.tensor(audio, device=device).unsqueeze(0).to(torch.float32)  # Add a batch dimension
+            audio_tensor = convert_audio(audio_tensor, input_sampling_rate, separator.samplerate, separator.audio_channels)
+            
+            # Ensure the tensor has 3 dimensions: [batch_size, channels, length]
+            if audio_tensor.dim() == 2:
+                audio_tensor = audio_tensor.unsqueeze(0)  # Add batch dimension if missing
+            
+            stems = apply_model(separator, audio_tensor, device=device)
+            vocal_stem_index = separator.sources.index('vocals')
+            vocals = stems[:, vocal_stem_index]
+            output_audios.append(vocals.cpu().numpy())  # Convert back to numpy on CPU
+        
+        except Exception as e:
+            print(f"Demucs processing failed for an audio file: {e}")
+            # Add the original audio if separation fails
+            output_audios.append(audio)
     
     return output_audios
 
