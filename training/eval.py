@@ -34,9 +34,12 @@ def separate_vocals(audios, device, input_sampling_rate=44100):
             stems = apply_model(separator, audio_tensor, device=device)
             vocal_stem_index = separator.sources.index('vocals')
             vocals = stems[:, vocal_stem_index]
-            vocals = vocals.mean(dim=0).cpu().numpy()  # Convert to mono by averaging channels
+
+            if vocals.shape[1] > 1:
+                vocals = vocals.mean(dim=1, keepdim=True)
+            
+            vocals = vocals.squeeze().cpu().numpy()  # Remove extra dimensions and convert to numpy
             output_audios.append(vocals)
-        
         except Exception as e:
             print(f"Demucs processing failed for an audio file: {e}")
             # Convert original audio to mono and add it if separation fails
@@ -110,6 +113,12 @@ def wer(
 ):
     # Separate vocals using Demucs
     audios = separate_vocals(audios, device, input_sampling_rate=sampling_rate)
+
+    # Ensure all audios are single-channel
+    for i, audio in enumerate(audios):
+        if audio.ndim != 1:
+            print(f"Warning: Audio at index {i} is not single-channel. Shape: {audio.shape}")
+            audios[i] = audio.mean(axis=-1) if audio.ndim > 1 else audio
 
     metric = evaluate.load("wer")
     asr_pipeline = pipeline(model=asr_model_name_or_path, device=device, chunk_length_s=25.0)
