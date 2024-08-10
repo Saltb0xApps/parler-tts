@@ -34,11 +34,14 @@ def separate_vocals(audios, device, input_sampling_rate=44100):
             stems = apply_model(separator, audio_tensor, device=device)
             vocal_stem_index = separator.sources.index('vocals')
             vocals = stems[:, vocal_stem_index]
-            output_audios.append(vocals.cpu().numpy())  # Convert back to numpy on CPU
+            vocals = vocals.mean(dim=0).cpu().numpy()  # Convert to mono by averaging channels
+            output_audios.append(vocals)
         
         except Exception as e:
             print(f"Demucs processing failed for an audio file: {e}")
-            # Add the original audio if separation fails
+            # Convert original audio to mono and add it if separation fails
+            if audio.ndim > 1:
+                audio = audio.mean(axis=0)  # Average channels to convert to mono
             output_audios.append(audio)
     
     return output_audios
